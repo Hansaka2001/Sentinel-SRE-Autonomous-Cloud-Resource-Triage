@@ -52,17 +52,17 @@ class ClusterState(TypedDict):
 # ---------------------------------------------------------------------------
 
 def _get_llm() -> ChatGoogleGenerativeAI:
-    """Return a Gemini 1.5-Pro LLM instance, loading env vars if needed."""
-    load_dotenv()
+    """Return a Gemini 2.0 Flash LLM instance, loading env vars if needed."""
+    load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise EnvironmentError(
             "GEMINI_API_KEY not found. Ensure it is set in your .env file."
         )
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
+        model="gemini-2.0-flash",   # Free-tier supported; 2.5-pro has 0 free-tier quota
         google_api_key=api_key,
-        temperature=0.3,          # slightly creative but mostly deterministic
+        temperature=0.3,
     )
 
 

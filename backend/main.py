@@ -35,7 +35,7 @@ if _PROJECT_ROOT not in sys.path:
 # ---------------------------------------------------------------------------
 # Load environment variables (.env must contain GEMINI_API_KEY)
 # ---------------------------------------------------------------------------
-load_dotenv(os.path.join(_PROJECT_ROOT, ".env"))
+load_dotenv(os.path.join(_PROJECT_ROOT, ".env"), override=True)
 
 # ---------------------------------------------------------------------------
 # Internal imports  (after path bootstrap)
