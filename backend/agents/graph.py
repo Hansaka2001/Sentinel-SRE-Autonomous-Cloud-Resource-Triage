@@ -36,10 +36,6 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 
-# ---------------------------------------------------------------------------
-# 1. State Schema
-# ---------------------------------------------------------------------------
-
 class ClusterState(TypedDict):
     predicted_demand:  int   # GPU units forecast for next hour
     cluster_capacity:  int   # Current available GPU capacity
@@ -47,24 +43,6 @@ class ClusterState(TypedDict):
     preemption_plan:   str   # LLM-generated K8s preemption plan
     alert_log:         str   # LLM-generated SRE incident log
 
-
-# ---------------------------------------------------------------------------
-# 2. LLM Initialisation (deferred until graph is invoked)
-# ---------------------------------------------------------------------------
-
-# def _get_llm() -> ChatGoogleGenerativeAI:
-#     """Return a Gemini 2.0 Flash LLM instance, loading env vars if needed."""
-#     load_dotenv(override=True)
-#     api_key = os.getenv("GEMINI_API_KEY")
-#     if not api_key:
-#         raise EnvironmentError(
-#             "GEMINI_API_KEY not found. Ensure it is set in your .env file."
-#         )
-#     return ChatGoogleGenerativeAI(
-#         model="gemini-2.0-flash",   # Free-tier supported; 2.5-pro has 0 free-tier quota
-#         google_api_key=api_key,
-#         temperature=0.3,
-#     )
 
 def _get_llm():
     """Return a Groq LLM instance for fast, free tier inference."""
@@ -80,9 +58,6 @@ def _get_llm():
     )
 
 
-# ---------------------------------------------------------------------------
-# 3. Agent Node Functions
-# ---------------------------------------------------------------------------
 
 def analyze_forecast_node(state: ClusterState) -> ClusterState:
     """
@@ -168,18 +143,11 @@ def communicator_node(state: ClusterState) -> ClusterState:
     return {**state, "alert_log": alert_log}
 
 
-# ---------------------------------------------------------------------------
-# 4. Conditional Routing
-# ---------------------------------------------------------------------------
 
 def _route_after_analysis(state: ClusterState) -> str:
     """Route to scheduler if there is a GPU shortage, otherwise end."""
     return "scheduler_node" if state["shortage"] > 0 else END
 
-
-# ---------------------------------------------------------------------------
-# 5. Graph Construction
-# ---------------------------------------------------------------------------
 
 def build_graph() -> StateGraph:
     """Assemble and compile the LangGraph state machine."""
@@ -213,10 +181,6 @@ def build_graph() -> StateGraph:
 # Compiled graph (module-level singleton for import by other modules)
 triage_graph = build_graph()
 
-
-# ---------------------------------------------------------------------------
-# 6. Self-test
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     load_dotenv()

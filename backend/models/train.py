@@ -27,33 +27,28 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
-BASE_DIR   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_CSV   = os.path.join(BASE_DIR, "dataset", "processed", "hourly_gpu_demand.csv")
-MODEL_DIR  = os.path.dirname(os.path.abspath(__file__))
-MODEL_PT   = os.path.join(MODEL_DIR, "gpu_forecaster.pt")
+
+BASE_DIR = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
+DATA_CSV = os.path.join(BASE_DIR, "dataset",
+                        "processed", "hourly_gpu_demand.csv")
+MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PT = os.path.join(MODEL_DIR, "gpu_forecaster.pt")
 SCALER_PKL = os.path.join(MODEL_DIR, "scaler.pkl")
 
-# ---------------------------------------------------------------------------
-# Hyper-parameters
-# ---------------------------------------------------------------------------
-LOOKBACK    = 24    # hours of history fed to the LSTM
-FORECAST    = 1     # hours ahead to predict
-HIDDEN_DIM  = 64
-NUM_LAYERS  = 2
-BATCH_SIZE  = 64
-EPOCHS      = 20
-LR          = 1e-3
+
+LOOKBACK = 24    # hours of history fed to the LSTM
+FORECAST = 1     # hours ahead to predict
+HIDDEN_DIM = 64
+NUM_LAYERS = 2
+BATCH_SIZE = 64
+EPOCHS = 20
+LR = 1e-3
 TRAIN_SPLIT = 0.85  # 85 % train / 15 % validation
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# ---------------------------------------------------------------------------
-# 1. Load and prepare the time-series
-# ---------------------------------------------------------------------------
 def load_series(path: str) -> np.ndarray:
     """Return the total GPU demand as a 1-D float32 numpy array."""
     df = pd.read_csv(path)
@@ -70,9 +65,6 @@ def load_series(path: str) -> np.ndarray:
     return series
 
 
-# ---------------------------------------------------------------------------
-# 2. Normalise
-# ---------------------------------------------------------------------------
 def fit_scaler(series: np.ndarray):
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled = scaler.fit_transform(series.reshape(-1, 1)).flatten()
@@ -80,9 +72,6 @@ def fit_scaler(series: np.ndarray):
     return scaled, scaler
 
 
-# ---------------------------------------------------------------------------
-# 3. Sliding-window Dataset
-# ---------------------------------------------------------------------------
 class GPUDemandDataset(Dataset):
     """
     Produces (x, y) pairs where:
@@ -111,21 +100,18 @@ class GPUDemandDataset(Dataset):
 def make_loaders(scaled: np.ndarray):
     dataset = GPUDemandDataset(scaled, lookback=LOOKBACK)
     n_train = int(len(dataset) * TRAIN_SPLIT)
-    n_val   = len(dataset) - n_train
+    n_val = len(dataset) - n_train
     train_ds, val_ds = torch.utils.data.random_split(
         dataset, [n_train, n_val],
         generator=torch.Generator().manual_seed(42),
     )
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False)
+    val_loader = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False)
     print(f"[3/5] Dataset  -> {len(dataset):,} windows  "
           f"(train={n_train:,}, val={n_val:,})")
     return train_loader, val_loader
 
 
-# ---------------------------------------------------------------------------
-# 4. LSTM Model
-# ---------------------------------------------------------------------------
 class LSTMForecaster(nn.Module):
     """
     Two-layer LSTM followed by a single linear output layer.
@@ -136,10 +122,10 @@ class LSTMForecaster(nn.Module):
 
     def __init__(
         self,
-        input_size:  int   = 1,
-        hidden_dim:  int   = HIDDEN_DIM,
-        num_layers:  int   = NUM_LAYERS,
-        output_size: int   = 1,
+        input_size:  int = 1,
+        hidden_dim:  int = HIDDEN_DIM,
+        num_layers:  int = NUM_LAYERS,
+        output_size: int = 1,
         dropout:     float = 0.2,
     ):
         super().__init__()
@@ -147,37 +133,38 @@ class LSTMForecaster(nn.Module):
         self.num_layers = num_layers
 
         self.lstm = nn.LSTM(
-            input_size  = input_size,
-            hidden_size = hidden_dim,
-            num_layers  = num_layers,
-            batch_first = True,
-            dropout     = dropout if num_layers > 1 else 0.0,
+            input_size=input_size,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
         )
         self.fc = nn.Linear(hidden_dim, output_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (batch, seq_len, 1)
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim, device=x.device)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim, device=x.device)
+        h0 = torch.zeros(self.num_layers, x.size(
+            0), self.hidden_dim, device=x.device)
+        c0 = torch.zeros(self.num_layers, x.size(
+            0), self.hidden_dim, device=x.device)
         out, _ = self.lstm(x, (h0, c0))  # out: (batch, seq_len, hidden_dim)
-        last   = out[:, -1, :]           # last time-step
+        last = out[:, -1, :]           # last time-step
         return self.fc(last)             # (batch, 1)
 
 
-# ---------------------------------------------------------------------------
-# 5. Training loop
-# ---------------------------------------------------------------------------
 def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader):
     model.to(DEVICE)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
-    print(f"[4/5] Training on {DEVICE}  (epochs={EPOCHS}, lr={LR}, batch={BATCH_SIZE})")
-    print(f"      Architecture: LSTM(hidden={HIDDEN_DIM}, layers={NUM_LAYERS}) -> Linear(1)")
+    print(
+        f"[4/5] Training on {DEVICE}  (epochs={EPOCHS}, lr={LR}, batch={BATCH_SIZE})")
+    print(
+        f"      Architecture: LSTM(hidden={HIDDEN_DIM}, layers={NUM_LAYERS}) -> Linear(1)")
     print()
 
     header = f"{'Epoch':>6} | {'Train MSE':>12} | {'Train RMSE':>12} | {'Val MSE':>10} | {'Val RMSE':>10}"
-    sep    = "-" * len(header)
+    sep = "-" * len(header)
     print(header)
     print(sep)
 
@@ -214,9 +201,6 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
     return model
 
 
-# ---------------------------------------------------------------------------
-# 6. Save artefacts
-# ---------------------------------------------------------------------------
 def save_artefacts(model: nn.Module, scaler: MinMaxScaler):
     os.makedirs(MODEL_DIR, exist_ok=True)
 
@@ -228,9 +212,6 @@ def save_artefacts(model: nn.Module, scaler: MinMaxScaler):
     print(f"      Scaler saved         -> {SCALER_PKL}")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 def main():
     print("=" * 62)
     print("  GPU Demand LSTM Forecaster -- Training Pipeline")
@@ -239,8 +220,8 @@ def main():
     print(f"  Lookback : {LOOKBACK} h  |  Forecast horizon: {FORECAST} h")
     print("=" * 62 + "\n")
 
-    series               = load_series(DATA_CSV)
-    scaled, scaler       = fit_scaler(series)
+    series = load_series(DATA_CSV)
+    scaled, scaler = fit_scaler(series)
     train_loader, val_loader = make_loaders(scaled)
 
     model = LSTMForecaster()
