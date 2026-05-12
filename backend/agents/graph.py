@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
+from langchain_groq import ChatGroq
 
 # ---------------------------------------------------------------------------
 # 1. State Schema
@@ -51,18 +52,31 @@ class ClusterState(TypedDict):
 # 2. LLM Initialisation (deferred until graph is invoked)
 # ---------------------------------------------------------------------------
 
-def _get_llm() -> ChatGoogleGenerativeAI:
-    """Return a Gemini 2.0 Flash LLM instance, loading env vars if needed."""
-    load_dotenv(override=True)
-    api_key = os.getenv("GEMINI_API_KEY")
+# def _get_llm() -> ChatGoogleGenerativeAI:
+#     """Return a Gemini 2.0 Flash LLM instance, loading env vars if needed."""
+#     load_dotenv(override=True)
+#     api_key = os.getenv("GEMINI_API_KEY")
+#     if not api_key:
+#         raise EnvironmentError(
+#             "GEMINI_API_KEY not found. Ensure it is set in your .env file."
+#         )
+#     return ChatGoogleGenerativeAI(
+#         model="gemini-2.0-flash",   # Free-tier supported; 2.5-pro has 0 free-tier quota
+#         google_api_key=api_key,
+#         temperature=0.3,
+#     )
+
+def _get_llm():
+    """Return a Groq LLM instance for fast, free tier inference."""
+    
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise EnvironmentError(
-            "GEMINI_API_KEY not found. Ensure it is set in your .env file."
-        )
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",   # Free-tier supported; 2.5-pro has 0 free-tier quota
-        google_api_key=api_key,
-        temperature=0.3,
+        raise EnvironmentError("GROQ_API_KEY not found in .env file.")
+        
+    return ChatGroq(
+        groq_api_key=api_key, 
+        model_name="llama-3.1-8b-instant",
+        temperature=0.3
     )
 
 
