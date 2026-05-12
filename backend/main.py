@@ -25,43 +25,31 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-# ---------------------------------------------------------------------------
-# Path bootstrap  (ensures project-root is on sys.path so sub-packages resolve)
-# ---------------------------------------------------------------------------
+
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-# ---------------------------------------------------------------------------
-# Load environment variables (.env must contain GEMINI_API_KEY)
-# ---------------------------------------------------------------------------
-load_dotenv(os.path.join(_PROJECT_ROOT, ".env"))
 
-# ---------------------------------------------------------------------------
-# Internal imports  (after path bootstrap)
-# ---------------------------------------------------------------------------
+load_dotenv(os.path.join(_PROJECT_ROOT, ".env"), override=True)
+
+
 from backend.models.forecaster import predict_next_hour          # noqa: E402
 from backend.agents.graph import triage_graph, ClusterState      # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
 logger = logging.getLogger("sentinel-sre")
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+
 CLUSTER_CAPACITY = 1000          # GPU units available in the test cluster
-_DATA_CSV = os.path.join(_PROJECT_ROOT, "dataset", "processed", "hourly_gpu_demand.csv")
+_DATA_CSV = os.path.join(_PROJECT_ROOT, "dataset",
+                         "processed", "hourly_gpu_demand.csv")
 _LOOKBACK = 24                   # hours fed to the LSTM (must match train.py)
 
-# ---------------------------------------------------------------------------
-# FastAPI App
-# ---------------------------------------------------------------------------
 app = FastAPI(
     title="Sentinel-SRE GPU Triage API",
     description=(
@@ -72,7 +60,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS — allow all origins so the frontend (React / plain HTML) can connect freely
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,9 +69,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _load_recent_24h() -> list[float]:
     """Read the last 24 rows of gpu_total from the processed CSV."""
@@ -106,9 +91,6 @@ def _build_initial_state(predicted_demand: int) -> ClusterState:
         alert_log="",
     )
 
-# ---------------------------------------------------------------------------
-# REST Endpoint: GET /api/forecast
-# ---------------------------------------------------------------------------
 
 @app.get("/api/forecast", summary="Get next-hour GPU demand forecast")
 async def get_forecast():
@@ -135,9 +117,6 @@ async def get_forecast():
         "cluster_capacity": CLUSTER_CAPACITY,
     }
 
-# ---------------------------------------------------------------------------
-# WebSocket Endpoint: ws://localhost:8000/ws/triage
-# ---------------------------------------------------------------------------
 
 @app.websocket("/ws/triage")
 async def triage_websocket(websocket: WebSocket):
@@ -163,7 +142,7 @@ async def triage_websocket(websocket: WebSocket):
 
     try:
         while True:
-            # ---- Receive -------------------------------------------------------
+
             raw = await websocket.receive_text()
             try:
                 payload = json.loads(raw)
@@ -181,9 +160,6 @@ async def triage_websocket(websocket: WebSocket):
 
             initial_state = _build_initial_state(predicted_demand)
 
-            # ---- Stream graph execution in a thread ----------------------------
-            # LangGraph's .stream() is synchronous; run it in a thread pool so
-            # we don't block the async event loop.
             loop = asyncio.get_event_loop()
 
             def _run_graph():
@@ -198,20 +174,12 @@ async def triage_websocket(websocket: WebSocket):
 
             graph_outputs = await loop.run_in_executor(None, _run_graph)
 
-            # ---- Flatten outputs -----------------------------------------------
-            # graph_outputs looks like:
-            #   { "analyze_forecast_node": {"shortage": 200, ...},
-            #     "scheduler_node":        {"preemption_plan": "...", ...},
-            #     "communicator_node":     {"alert_log": "...", ...} }
-            # We merge all diffs into one flat dict.
             flat: dict = {}
             for node_update in graph_outputs.values():
                 flat.update(node_update)
 
             shortage = flat.get("shortage", 0)
 
-            # ---- Send results back over the socket ----------------------------
-            # Always send shortage first
             await websocket.send_text(json.dumps({
                 "event": "shortage",
                 "data": {"shortage": shortage},
@@ -244,7 +212,8 @@ async def triage_websocket(websocket: WebSocket):
 
             # Signal completion
             await websocket.send_text(json.dumps({"event": "done", "data": {}}))
-            logger.info(f"WS /ws/triage — triage complete (shortage={shortage})")
+            logger.info(
+                f"WS /ws/triage — triage complete (shortage={shortage})")
 
     except WebSocketDisconnect:
         logger.info(f"WS /ws/triage — client {client} disconnected")
@@ -258,9 +227,6 @@ async def triage_websocket(websocket: WebSocket):
         except Exception:
             pass  # socket may already be closed
 
-# ---------------------------------------------------------------------------
-# Root health-check
-# ---------------------------------------------------------------------------
 
 @app.get("/", summary="Health check")
 async def root():
@@ -271,9 +237,6 @@ async def root():
         "cluster_capacity": CLUSTER_CAPACITY,
     }
 
-# ---------------------------------------------------------------------------
-# Execution block
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     uvicorn.run(

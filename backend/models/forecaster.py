@@ -23,19 +23,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-# ---------------------------------------------------------------------------
-# Paths (resolved relative to this file's location)
-# ---------------------------------------------------------------------------
-_MODEL_DIR  = os.path.dirname(os.path.abspath(__file__))
-_MODEL_PT   = os.path.join(_MODEL_DIR, "gpu_forecaster.pt")
+
+_MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
+_MODEL_PT = os.path.join(_MODEL_DIR, "gpu_forecaster.pt")
 _SCALER_PKL = os.path.join(_MODEL_DIR, "scaler.pkl")
 
-# ---------------------------------------------------------------------------
-# LSTM architecture  (must match train.py exactly)
-# ---------------------------------------------------------------------------
+
 _HIDDEN_DIM = 64
 _NUM_LAYERS = 2
-_LOOKBACK   = 24
+_LOOKBACK = 24
 
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -45,10 +41,10 @@ class _LSTMForecaster(nn.Module):
 
     def __init__(
         self,
-        input_size:  int   = 1,
-        hidden_dim:  int   = _HIDDEN_DIM,
-        num_layers:  int   = _NUM_LAYERS,
-        output_size: int   = 1,
+        input_size:  int = 1,
+        hidden_dim:  int = _HIDDEN_DIM,
+        num_layers:  int = _NUM_LAYERS,
+        output_size: int = 1,
         dropout:     float = 0.2,
     ):
         super().__init__()
@@ -56,25 +52,24 @@ class _LSTMForecaster(nn.Module):
         self.num_layers = num_layers
 
         self.lstm = nn.LSTM(
-            input_size  = input_size,
-            hidden_size = hidden_dim,
-            num_layers  = num_layers,
-            batch_first = True,
-            dropout     = dropout if num_layers > 1 else 0.0,
+            input_size=input_size,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
         )
         self.fc = nn.Linear(hidden_dim, output_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim, device=x.device)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim, device=x.device)
+        h0 = torch.zeros(self.num_layers, x.size(
+            0), self.hidden_dim, device=x.device)
+        c0 = torch.zeros(self.num_layers, x.size(
+            0), self.hidden_dim, device=x.device)
         out, _ = self.lstm(x, (h0, c0))
         return self.fc(out[:, -1, :])
 
 
-# ---------------------------------------------------------------------------
-# Module-level cache (lazy-loaded on first inference call)
-# ---------------------------------------------------------------------------
-_model  = None
+_model = None
 _scaler = None
 
 
@@ -104,9 +99,6 @@ def _load_artefacts():
     _model.eval()
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 def predict_next_hour(recent_24h_data) -> int:
     """
     Predict total GPU demand for the next hour.
@@ -142,7 +134,8 @@ def predict_next_hour(recent_24h_data) -> int:
     scaled_input = _scaler.transform(data.reshape(-1, 1)).flatten()
 
     # Build tensor: (1, 24, 1)
-    x = torch.tensor(scaled_input, dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
+    x = torch.tensor(scaled_input, dtype=torch.float32).unsqueeze(
+        0).unsqueeze(-1)
     x = x.to(_DEVICE)
 
     # Run inference
@@ -155,21 +148,20 @@ def predict_next_hour(recent_24h_data) -> int:
     return int(round(float(raw_pred)))
 
 
-# ---------------------------------------------------------------------------
-# Quick self-test when run directly
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import pandas as pd
 
     print("Running self-test for forecaster.py ...")
 
     _BASE_DIR = os.path.dirname(os.path.dirname(_MODEL_DIR))
-    _DATA_CSV = os.path.join(_BASE_DIR, "dataset", "processed", "hourly_gpu_demand.csv")
+    _DATA_CSV = os.path.join(_BASE_DIR, "dataset",
+                             "processed", "hourly_gpu_demand.csv")
 
     df = pd.read_csv(_DATA_CSV)
     col = "gpu_total" if "gpu_total" in df.columns else df.columns[1]
     sample_24h = df[col].values[:24].tolist()
 
-    print(f"  Input (last 24 h gpu_total): {[round(v, 1) for v in sample_24h]}")
+    print(
+        f"  Input (last 24 h gpu_total): {[round(v, 1) for v in sample_24h]}")
     prediction = predict_next_hour(sample_24h)
     print(f"  Predicted next-hour GPU demand: {prediction}")
