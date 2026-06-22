@@ -208,6 +208,14 @@ Streams real-time updates from the autonomous agent workflow when processing a s
 
 ---
 
+## 🖥️ Web UI Preview
+
+### Dashboard Overview
+![Dashboard UI](frontend/web_ui/1.png)
+
+### Metrics & Agent View
+![Metrics UI](frontend/web_ui/2.png)
+
 ## 🧠 Understanding the Components
 
 ### 1. **LSTM Forecaster** (`backend/models/forecaster.py`)
